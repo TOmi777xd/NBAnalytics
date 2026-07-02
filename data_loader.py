@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import streamlit as st
 from nba_api.stats.static import teams
@@ -33,15 +34,24 @@ def load_player_stats(season='2025-26'):
     Fetch player stats for the specified season.
     """
     try:
-        # Pidiendo 'Totals' para obtener precisión exacta y evitar el redondeo de la API a 1 decimal
-        # Esto soluciona que los jugadores se vean en filas "cuadriculadas" en el scatter plot
-        stats = leaguedashplayerstats.LeagueDashPlayerStats(
-            season=season,
-            per_mode_detailed='Totals',
-            headers=CUSTOM_HEADERS,
-            timeout=120
-        )
-        df = stats.get_data_frames()[0]
+        csv_filename = f'player_stats_{season.replace("-", "_")}.csv'
+        
+        if os.path.exists(csv_filename):
+            df = pd.read_csv(csv_filename)
+        else:
+            # Pidiendo 'Totals' para obtener precisión exacta y evitar el redondeo de la API a 1 decimal
+            # Esto soluciona que los jugadores se vean en filas "cuadriculadas" en el scatter plot
+            stats = leaguedashplayerstats.LeagueDashPlayerStats(
+                season=season,
+                per_mode_detailed='Totals',
+                headers=CUSTOM_HEADERS,
+                timeout=15
+            )
+            df = stats.get_data_frames()[0]
+            try:
+                df.to_csv(csv_filename, index=False)
+            except:
+                pass
         
         # Columnas que necesitan promediarse por partido para igualar a 'PerGame' pero con máxima precisión
         cols_to_avg = [
