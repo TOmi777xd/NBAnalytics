@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <style>
+    body {
+      margin: 0; padding: 0;
+      display: flex; justify-content: center; align-items: center;
+      height: 300px; background: transparent; overflow: hidden;
+      font-family: Arial, sans-serif;
+    }
+    .scene {
+      width: 120px; height: 120px;
+      perspective: 1200px;
+      position: relative;
+    }
+    .carousel {
+      width: 100%; height: 100%;
+      position: absolute;
+      transform-style: preserve-3d;
+      transition: transform 0.1s;
+    }
+    .carousel-item {
+      position: absolute;
+      width: 120px; height: 120px;
+      left: 0; top: 0;
+      display: flex; flex-direction: column; justify-content: center; align-items: center;
+      transition: transform 1s, filter 0.3s, opacity 0.1s;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-drag: none;
+      filter: drop-shadow(0px 10px 15px rgba(0,0,0,0.5));
+    }
+    .carousel-item.active {
+      filter: drop-shadow(0px 20px 30px rgba(0,0,0,0.8));
+      z-index: 100;
+    }
+    .carousel-item img {
+      width: 100%; height: 100%;
+      object-fit: contain;
+      -webkit-user-drag: none;
+      pointer-events: none;
+    }
+    .carousel-item:hover {
+      filter: drop-shadow(0px 10px 15px rgba(0,0,0,0.8));
+      opacity: 0.8 !important;
+    }
+    .carousel-item.active:hover {
+      filter: drop-shadow(0px 20px 30px rgba(0,0,0,0.8));
+      opacity: 1.0 !important;
+    }
+    .carousel-caption {
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+      text-shadow: 0px 2px 4px black;
+      margin-top: 10px;
+      text-align: center;
+      opacity: 0;
+      transition: opacity 0.3s;
+    }
+    .carousel-item.active .carousel-caption {
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <div class="scene">
+    <div class="carousel" id="carousel"></div>
+  </div>
+
+  <script>
+    let images = [];
+    let captions = [];
+    let activeIndex = 0;
+    
+    function sendHeight() {
+      window.parent.postMessage({
+        isStreamlitMessage: true,
+        type: "streamlit:setFrameHeight",
+        height: 350
+      }, "*");
+    }
+
+    function sendValue(value) {
+      window.parent.postMessage({
+        isStreamlitMessage: true,
+        type: "streamlit:setComponentValue",
+        value: value
+      }, "*");
+    }
+
+    function onDataFromPython(event) {
+      if (event.data.type !== "streamlit:render") return;
+      const args = event.data.args;
+      if (args.images && images.length === 0) {
+        images = args.images;
+        captions = args.captions || [];
+        activeIndex = args.default || 0;
+        buildCarousel();
+        sendHeight();
+      }
+    }
+    window.addEventListener("message", onDataFromPython);
+
+    window.parent.postMessage({
+      isStreamlitMessage: true,
+      type: "streamlit:componentReady",
+      apiVersion: 1
+    }, "*");
+
+    const carouselEl = document.getElementById("carousel");
+    let currentRotation = 0;
+    let isDragging = false;
+    let startX = 0;
+    let items = [];
+    let thetaStep = 0;
+    
+    function updateStyles(rot) {
+      items.forEach((el, i) => {
+        let angle = (thetaStep * i + rot) % 360;
+        if (angle < -180) angle += 360;
+        if (angle > 180) angle -= 360;
+        
+        let absAngle = Math.abs(angle);
+        // Hacemos que caiga más rápido (divide por 45 en vez de 80)
+        // Así los de los lados se verán "un poquito menos"
+        let op = Math.max(0.05, 1.0 - (absAngle / 45));
+        el.style.opacity = op;
+        
+        if (i === activeIndex && op > 0.95) {
+          el.classList.add('active');
+        } else {
+          el.classList.remove('active');
+        }
+      });
+    }
+
+    function updateActive() {
+      updateStyles(currentRotation);
+    }
+
+    function buildCarousel() {
+      const numItems = images.length;
+      thetaStep = 360 / numItems;
+      const radius = Math.round((120 / 2) / Math.tan(Math.PI / numItems)) + 60; 
+      
+      for (let i = 0; i < numItems; i++) {
+        const theta = thetaStep * i;
+        const el = document.createElement("div");
+        el.className = "carousel-item";
+        el.style.transform = `rotateY(${theta}deg) translateZ(${radius}px)`;
+        
+        const img = document.createElement("img");
+        img.src = images[i];
+        
+        const cap = document.createElement("div");
+        cap.className = "carousel-caption";
+        cap.innerText = captions[i] || "";
+
+        el.appendChild(img);
+        el.appendChild(cap);
+        
+        el.addEventListener("click", () => {
+          if (!isDraggingItem) {
+            activeIndex = i;
+            sendValue(i);
+            currentRotation = -theta;
+            carouselEl.style.transition = "transform 0.6s cubic-bezier(0.25, 1, 0.5, 1)";
+            carouselEl.style.transform = `rotateY(${currentRotation}deg)`;
+            updateActive();
+          }
+        });
+        
+        carouselEl.appendChild(el);
+        items.push(el);
+      }
+      
+      currentRotation = - (thetaStep * activeIndex);
+      carouselEl.style.transform = `rotateY(${currentRotation}deg)`;
+      updateActive();
+    }
+
+    let isDraggingItem = false;
+    let lastRotation = 0;
+    
+    function handleDragStart(x) {
+      isDragging = true;
+      isDraggingItem = false;
+      startX = x;
+      lastRotation = currentRotation;
+      carouselEl.style.transition = "none";
+    }
+
+    function handleDragMove(x) {
+      if (!isDragging) return;
+      const dx = x - startX;
+      if (Math.abs(dx) > 5) isDraggingItem = true;
+      let newRot = lastRotation + dx * 0.4;
+      carouselEl.style.transform = `rotateY(${newRot}deg)`;
+      updateStyles(newRot);
+    }
+
+    function handleDragEnd(x) {
+      if (!isDragging) return;
+      isDragging = false;
+      const dx = x - startX;
+      currentRotation = lastRotation + dx * 0.4;
+      
+      let closestIndex = Math.round(-currentRotation / thetaStep) % images.length;
+      if (closestIndex < 0) closestIndex += images.length;
+      
+      activeIndex = closestIndex;
+      currentRotation = - (activeIndex * thetaStep);
+      
+      carouselEl.style.transition = "transform 0.4s ease-out";
+      carouselEl.style.transform = `rotateY(${currentRotation}deg)`;
+      updateActive();
+      
+      if (isDraggingItem) {
+        sendValue(activeIndex);
+      }
+    }
+
+    document.addEventListener("mousedown", (e) => handleDragStart(e.clientX));
+    document.addEventListener("mousemove", (e) => handleDragMove(e.clientX));
+    document.addEventListener("mouseup", (e) => handleDragEnd(e.clientX));
+    
+    document.addEventListener("touchstart", (e) => handleDragStart(e.touches[0].clientX), {passive: true});
+    document.addEventListener("touchmove", (e) => handleDragMove(e.touches[0].clientX), {passive: true});
+    document.addEventListener("touchend", (e) => handleDragEnd(e.changedTouches[0].clientX));
+
+  </script>
+</body>
+</html>
