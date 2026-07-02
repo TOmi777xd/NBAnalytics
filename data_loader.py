@@ -28,7 +28,7 @@ def load_teams():
         st.error(f"Error fetching teams: {e}")
         return pd.DataFrame()
 
-@st.cache_data(ttl=86400)
+@st.cache_data(ttl=3600)
 def load_player_stats(season='2025-26'):
     """
     Fetch player stats for the specified season.
@@ -60,12 +60,14 @@ def load_player_stats(season='2025-26'):
             'PLUS_MINUS', 'NBA_FANTASY_PTS', 'DD2', 'TD3'
         ]
         
+        # Convertimos las columnas a float de golpe para evitar problemas de tipos (dtype 'int64')
+        existing_cols = [c for c in cols_to_avg if c in df.columns]
+        df[existing_cols] = df[existing_cols].astype(float)
+        
         # Evitar división por cero
         valid_gp = df['GP'] > 0
-        for col in cols_to_avg:
-            if col in df.columns:
-                df[col] = df[col].astype(float) # Convertir a float primero
-                df.loc[valid_gp, col] = df.loc[valid_gp, col] / df.loc[valid_gp, 'GP']
+        for col in existing_cols:
+            df.loc[valid_gp, col] = df.loc[valid_gp, col] / df.loc[valid_gp, 'GP']
                 
         return df
     except Exception as e:
