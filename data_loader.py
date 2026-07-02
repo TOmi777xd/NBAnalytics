@@ -64,6 +64,7 @@ def load_player_stats(season='2025-26'):
         valid_gp = df['GP'] > 0
         for col in cols_to_avg:
             if col in df.columns:
+                df[col] = df[col].astype(float) # Convertir a float primero
                 df.loc[valid_gp, col] = df.loc[valid_gp, col] / df.loc[valid_gp, 'GP']
                 
         return df
