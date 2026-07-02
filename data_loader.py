@@ -3,6 +3,17 @@ import streamlit as st
 from nba_api.stats.static import teams
 from nba_api.stats.endpoints import leaguedashplayerstats
 
+CUSTOM_HEADERS = {
+    'Host': 'stats.nba.com',
+    'Connection': 'keep-alive',
+    'Accept': 'application/json, text/plain, */*',
+    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+    'Referer': 'https://www.nba.com/',
+    'Accept-Language': 'en-US,en;q=0.9',
+    'x-nba-stats-origin': 'stats',
+    'x-nba-stats-token': 'true',
+}
+
 @st.cache_data(ttl=86400)
 def load_teams():
     """
@@ -26,7 +37,9 @@ def load_player_stats(season='2025-26'):
         # Esto soluciona que los jugadores se vean en filas "cuadriculadas" en el scatter plot
         stats = leaguedashplayerstats.LeagueDashPlayerStats(
             season=season,
-            per_mode_detailed='Totals'
+            per_mode_detailed='Totals',
+            headers=CUSTOM_HEADERS,
+            timeout=120
         )
         df = stats.get_data_frames()[0]
         
